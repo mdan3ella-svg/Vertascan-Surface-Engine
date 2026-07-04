@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VERTASCAN | Surface Engine</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0b0c0e;
+    --panel:#141619;
+    --panel-alt:#1b1e22;
+    --line:#2a2d32;
+    --line-bright:#3a3e45;
+    --text:#e7e5e0;
+    --text-dim:#8b8f96;
+    --amber:#ff7a1a;
+    --amber-dim:#8a4413;
+    --cyan:#4fd1c5;
+    --danger:#e5484d;
+    --radius:2px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:var(--void);color:var(--text);
+    font-family:'Inter',sans-serif;overflow:hidden;user-select:none;}
+  #app{display:grid;grid-template-rows:44px 1fr 26px;grid-template-columns:220px 1fr 260px;
+    grid-template-areas:"top top top" "left view right" "status status status";
+    width:100vw;height:100vh;}
+
+  #topbar{grid-area:top;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;padding:0 12px;gap:18px;z-index:20;}
+  #logo{display:flex;align-items:center;gap:10px;}
+  #logo canvas{width:28px;height:28px;border-radius:1px;}
+  #logo .word{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:1.5px;color:var(--text);}
+  #logo .word span{color:var(--amber);}
+  #logo .sub{font-family:'Space Mono',monospace;font-size:9px;color:var(--text-dim);letter-spacing:2px;margin-top:1px;}
+  .menu-group{display:flex;gap:2px;}
+  .topbtn{background:transparent;border:1px solid transparent;color:var(--text-dim);font-size:12px;
+    font-family:'Inter',sans-serif;padding:6px 10px;cursor:pointer;border-radius:var(--radius);}
+  .topbtn:hover{background:var(--panel-alt);border-color:var(--line);color:var(--text);}
+  .topbtn.active{color:var(--amber);border-color:var(--amber-dim);background:rgba(255,122,26,0.08);}
+  #analysisSelect{background:var(--panel-alt);border:1px solid var(--line);color:var(--text);
+    font-size:12px;padding:6px 8px;border-radius:var(--radius);font-family:'Inter',sans-serif;}
+  .spacer{flex:1;}
+  #fileInput{display:none;}
+
+  #left{grid-area:left;background:var(--panel);border-right:1px solid var(--line);
+    overflow-y:auto;padding:10px 8px;}
+  .dock-title{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:1.5px;
+    color:var(--text-dim);margin:14px 4px 6px;text-transform:uppercase;}
+  .dock-title:first-child{margin-top:2px;}
+  .tool-btn{width:100%;text-align:left;background:var(--panel-alt);border:1px solid var(--line);
+    color:var(--text);font-size:12px;padding:8px 10px;margin-bottom:4px;border-radius:var(--radius);
+    cursor:pointer;display:flex;align-items:center;gap:8px;font-family:'Inter',sans-serif;}
+  .tool-btn:hover{border-color:var(--line-bright);background:#20242a;}
+  .tool-btn.active{border-color:var(--amber);color:var(--amber);background:rgba(255,122,26,0.08);}
+  .tool-btn .ico{width:14px;text-align:center;font-size:12px;color:var(--cyan);}
+  #curveHint{font-size:10.5px;color:var(--text-dim);line-height:1.5;padding:8px;
+    border:1px dashed var(--line);border-radius:var(--radius);margin-top:6px;display:none;}
+
+  #view{grid-area:view;position:relative;background:#000;overflow:hidden;}
+  #view canvas{display:block;width:100%;height:100%;}
+  #viewportOverlay{position:absolute;top:8px;left:10px;font-family:'Space Mono',monospace;
+    font-size:10px;color:var(--text-dim);pointer-events:none;line-height:1.6;}
+  #viewportOverlay b{color:var(--cyan);}
+  #cameraTag{position:absolute;top:8px;right:10px;font-family:'Space Mono',monospace;font-size:10px;
+    color:var(--amber);pointer-events:none;letter-spacing:1px;}
+  #dropHint{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(255,122,26,0.06);border:2px dashed var(--amber);pointer-events:none;
+    font-family:'Rajdhani',sans-serif;font-size:20px;color:var(--amber);letter-spacing:2px;z-index:5;}
+
+  #right{grid-area:right;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;overflow:hidden;}
+  #explorer{flex:1 1 40%;overflow-y:auto;border-bottom:1px solid var(--line);padding:8px;}
+  #inspector{flex:1 1 60%;overflow-y:auto;padding:8px;}
+  .scene-item{display:flex;align-items:center;gap:6px;padding:5px 6px;font-size:11.5px;
+    border-radius:var(--radius);cursor:pointer;color:var(--text-dim);}
+  .scene-item:hover{background:var(--panel-alt);}
+  .scene-item.sel{background:rgba(255,122,26,0.1);color:var(--text);border-left:2px solid var(--amber);}
+  .scene-item .vis{cursor:pointer;width:14px;color:var(--cyan);font-size:10px;}
+  .scene-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .scene-item .del{color:var(--text-dim);cursor:pointer;font-size:11px;}
+  .scene-item .del:hover{color:var(--danger);}
+  .field-row{display:flex;align-items:center;gap:4px;margin-bottom:6px;}
+  .field-row label{width:14px;font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);}
+  .field-row input[type=number]{width:100%;background:var(--panel-alt);border:1px solid var(--line);
+    color:var(--text);font-size:11px;padding:4px 5px;border-radius:var(--radius);font-family:'Space Mono',monospace;}
+  .field-group{margin-bottom:12px;}
+  .field-group-title{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:1.2px;
+    color:var(--text-dim);text-transform:uppercase;margin-bottom:6px;}
+  .swatch-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+  .swatch{border:1px solid var(--line);border-radius:var(--radius);padding:7px 4px;text-align:center;
+    font-size:9.5px;color:var(--text-dim);cursor:pointer;background:var(--panel-alt);}
+  .swatch:hover{border-color:var(--amber);color:var(--text);}
+  .swatch .dot{width:16px;height:16px;border-radius:50%;margin:0 auto 4px;}
+  #colorPick{width:100%;height:28px;border:1px solid var(--line);background:var(--panel-alt);
+    border-radius:var(--radius);cursor:pointer;}
+  .empty-note{font-size:11px;color:var(--text-dim);padding:10px 4px;line-height:1.5;}
+  .btn{width:100%;background:var(--panel-alt);border:1px solid var(--line);color:var(--text);
+    font-size:11px;padding:7px;border-radius:var(--radius);cursor:pointer;margin-top:4px;font-family:'Inter',sans-serif;}
+  .btn:hover{border-color:var(--amber);color:var(--amber);}
+  .btn.primary{border-color:var(--amber-dim);background:rgba(255,122,26,0.1);color:var(--amber);}
+
+  #status{grid-area:status;background:var(--panel);border-top:1px solid var(--line);
+    display:flex;align-items:center;padding:0 12px;gap:16px;font-family:'Space Mono',monospace;
+    font-size:10px;color:var(--text-dim);}
+  #status .sep{width:1px;height:12px;background:var(--line);}
+  #status b{color:var(--cyan);}
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-track{background:var(--panel);}
+  ::-webkit-scrollbar-thumb{background:var(--line-bright);border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div id="logo">
+      <canvas id="logoCanvas" width="56" height="56"></canvas>
+      <div>
+        <div class="word">VERTA<span>SCAN</span></div>
+        <div class="sub">SURFACE ENGINE</div>
+      </div>
+    </div>
+    <div class="menu-group">
+      <button class="topbtn" id="btnImport">Import</button>
+      <button class="topbtn" id="btnExportGLTF">Export GLB</button>
+      <button class="topbtn" id="btnExportSTL">Export STL</button>
+      <button class="topbtn" id="btnCapture">Capture Render</button>
+      <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.stl">
+    </div>
+    <div class="menu-group">
+      <span style="font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;align-self:center;">ENV</span>
+      <select id="envSelect">
+        <option value="studio">Studio</option>
+        <option value="sunset">Sunset</option>
+        <option value="overcast">Overcast</option>
+        <option value="neutral">Neutral Grey</option>
+      </select>
+      <button class="topbtn" id="btnSSAO" title="Screen-space ambient occlusion">SSAO</button>
+      <button class="topbtn" id="btnSSR" title="Screen-space reflections">SSR</button>
+    </div>
+    <div class="menu-group">
+      <button class="topbtn" id="btnUndo">Undo</button>
+      <button class="topbtn" id="btnRedo">Redo</button>
+    </div>
+    <div class="menu-group" id="gizmoModes">
+      <button class="topbtn active" data-gizmo="translate" title="W">Move</button>
+      <button class="topbtn" data-gizmo="rotate" title="E">Rotate</button>
+      <button class="topbtn" data-gizmo="scale" title="R">Scale</button>
+    </div>
+    <div class="menu-group">
+      <span style="font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;align-self:center;">ANALYSIS</span>
+      <select id="analysisSelect">
+        <option value="shaded">Shaded PBR</option>
+        <option value="wire">Wireframe</option>
+        <option value="normal">Normal Map</option>
+        <option value="zebra">Zebra Stripes</option>
+        <option value="curvature">Curvature Tint</option>
+      </select>
+    </div>
+    <div class="spacer"></div>
+    <div class="menu-group" id="camBookmarks">
+      <button class="topbtn" data-cam="persp">Persp</button>
+      <button class="topbtn" data-cam="top">Top</button>
+      <button class="topbtn" data-cam="front">Front</button>
+      <button class="topbtn" data-cam="right">Right</button>
+    </div>
+  </div>
+
+  <div id="left">
+    <div class="dock-title">Sketch</div>
+    <button class="tool-btn" data-tool="curve"><span class="ico">✎</span>Draw Curve</button>
+    <button class="tool-btn" data-tool="select"><span class="ico">▸</span>Select / Move</button>
+    <div id="curveHint">Click in viewport to place curve points on the ground plane.<br><b>Enter</b> or double-click to finish. <b>Esc</b> to cancel.</div>
+
+    <div class="dock-title">Surfacing</div>
+    <button class="tool-btn" id="opRevolve"><span class="ico">◎</span>Revolve Curve</button>
+    <button class="tool-btn" id="opExtrude"><span class="ico">▤</span>Extrude Curve</button>
+    <button class="tool-btn" id="opLoft"><span class="ico">▥</span>Loft (2 curves)</button>
+
+    <div class="dock-title">Primitives</div>
+    <button class="tool-btn" data-prim="box"><span class="ico">▢</span>Box</button>
+    <button class="tool-btn" data-prim="sphere"><span class="ico">○</span>Sphere</button>
+    <button class="tool-btn" data-prim="cylinder"><span class="ico">▮</span>Cylinder</button>
+    <button class="tool-btn" data-prim="cone"><span class="ico">▲</span>Cone</button>
+    <button class="tool-btn" data-prim="torus"><span class="ico">◐</span>Torus</button>
+
+    <div class="dock-title">Mesh</div>
+    <button class="tool-btn" id="opShellFlip"><span class="ico">⇄</span>Flip Normals</button>
+    <button class="tool-btn" id="opMirror"><span class="ico">⇋</span>Mirror X</button>
+  </div>
+
+  <div id="view">
+    <div id="dropHint">DROP GLB / OBJ / STL TO IMPORT</div>
+    <div id="viewportOverlay">
+      <div>GRID: <b>10mm</b> · UNITS: <b>mm</b></div>
+      <div>OBJECTS: <b id="objCount">0</b></div>
+    </div>
+    <div id="cameraTag">PERSPECTIVE</div>
+  </div>
+
+  <div id="right">
+    <div id="explorer">
+      <div class="dock-title" style="margin-top:2px;">Scene Explorer</div>
+      <div id="sceneList"></div>
+    </div>
+    <div id="inspector">
+      <div class="dock-title" style="margin-top:2px;">Inspector</div>
+      <div id="inspectorBody"><div class="empty-note">Select an object in the viewport or Scene Explorer to edit its transform and material.</div></div>
+    </div>
+  </div>
+
+  <div id="status">
+    <span>VERTASCAN // SURFACE ENGINE v0.1-lite</span>
+    <div class="sep"></div>
+    <span id="statSel">NO SELECTION</span>
+    <div class="sep"></div>
+    <span id="statTool">TOOL: SELECT</span>
+    <div class="sep"></div>
+    <span id="statFps">-- FPS</span>
+  </div>
+
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { SSRPass } from 'three/addons/postprocessing/SSRPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ============================================================
+   VERTASCAN | SURFACE ENGINE (lite)
+   Real, working curve -> surface modeling on top of Three.js.
+   Not a CAD kernel: no BREP/NURBS math, no dependency graph.
+   What IS real: curve capture, revolve/extrude/loft surface
+   generation, PBR material presets, live analysis shading
+   modes, import/export, undo/redo, camera bookmarks.
+   ============================================================ */
+
+const viewEl = document.getElementById('view');
+
+// Surface any uncaught script error directly in the UI. Without this, a single
+// thrown error anywhere above a button's wiring would silently stop every
+// feature defined after it, with zero visible indication of what happened.
+window.addEventListener('error', (e)=>{
+  const bar = document.getElementById('statSel');
+  if(bar){ bar.textContent = 'SCRIPT ERROR: ' + (e.message||'see console'); bar.style.color = '#e5484d'; }
+  console.error('VERTASCAN runtime error:', e.error||e.message);
+});
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+viewEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0c0e);
+scene.fog = new THREE.Fog(0x0b0c0e, 40, 160);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+camera.position.set(9, 7, 12);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0,1,0);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.position.set(6,10,4);
+scene.add(key);
+scene.add(new THREE.AmbientLight(0x404040, 0.6));
+
+/* ---------------- Environment presets (real PBR IBL, not fake reflections) ---------------- */
+function makeGradientEnvTexture(stops){
+  const c = document.createElement('canvas'); c.width=64; c.height=256;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,256);
+  stops.forEach(s=>grad.addColorStop(s.stop, s.color));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,64,256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const ENV_PRESETS = {
+  studio:   ()=> pmrem.fromScene(new RoomEnvironment(), 0.04).texture,
+  sunset:   ()=> pmrem.fromEquirectangular(makeGradientEnvTexture([
+    {stop:0,color:'#150f22'},{stop:0.45,color:'#ff8a3d'},{stop:0.55,color:'#ffd9a0'},{stop:1,color:'#241708'}
+  ])).texture,
+  overcast: ()=> pmrem.fromEquirectangular(makeGradientEnvTexture([
+    {stop:0,color:'#5c6672'},{stop:0.5,color:'#c9cdd2'},{stop:1,color:'#33363a'}
+  ])).texture,
+  neutral:  ()=> pmrem.fromEquirectangular(makeGradientEnvTexture([
+    {stop:0,color:'#3c3c3c'},{stop:0.5,color:'#7a7a7a'},{stop:1,color:'#181818'}
+  ])).texture,
+};
+function setEnvironment(name){
+  try { scene.environment = ENV_PRESETS[name] ? ENV_PRESETS[name]() : ENV_PRESETS.studio(); }
+  catch(err){ console.warn('VERTASCAN: environment preset failed', err); }
+}
+setEnvironment('studio');
+document.getElementById('envSelect').addEventListener('change', e=>setEnvironment(e.target.value));
+
+const grid = new THREE.GridHelper(40, 80, 0x3a3e45, 0x22242a);
+scene.add(grid);
+const groundPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+
+const contentRoot = new THREE.Group();
+scene.add(contentRoot);
+
+// On-screen move/rotate/scale gizmo. Wrapped defensively: if this addon's API
+// differs from what's expected on a given Three.js build, it must fail quietly
+// rather than throwing and aborting every line of setup code below it.
+let transformControls = null;
+try {
+  transformControls = new TransformControls(camera, renderer.domElement);
+  transformControls.setSize(0.9);
+  // Three.js r169+ exposes the visual gizmo via getHelper(); older builds are
+  // themselves an Object3D and get added to the scene directly.
+  const gizmoVisual = (typeof transformControls.getHelper === 'function')
+    ? transformControls.getHelper()
+    : transformControls;
+  scene.add(gizmoVisual);
+  transformControls.addEventListener('dragging-changed', (e)=>{ controls.enabled = !e.value; });
+  transformControls.addEventListener('objectChange', ()=>{
+    if(selectionBox) selectionBox.update();
+    syncInspectorFields();
+  });
+  transformControls.enabled = false;
+  transformControls.visible = false;
+} catch(err){
+  console.warn('VERTASCAN: transform gizmo unavailable, continuing without it.', err);
+  transformControls = null;
+}
+
+/* ---------------- Post-processing pipeline: SSAO + SSR (toggleable) ---------------- */
+let composer = null, renderPass = null, outputPass = null;
+let ssaoEnabled = true, ssrEnabled = false;
+try {
+  composer = new EffectComposer(renderer);
+  renderPass = new RenderPass(scene, camera);
+  outputPass = new OutputPass();
+  rebuildPostFX();
+} catch(err){
+  console.warn('VERTASCAN: post-processing pipeline unavailable, falling back to direct render.', err);
+  composer = null;
+}
+function rebuildPostFX(){
+  if(!composer) return;
+  try {
+    composer.passes.length = 0;
+    composer.addPass(renderPass);
+    if(ssaoEnabled){
+      const ssaoPass = new SSAOPass(scene, camera, viewEl.clientWidth||1, viewEl.clientHeight||1);
+      ssaoPass.kernelRadius = 0.5;
+      ssaoPass.minDistance = 0.0008;
+      ssaoPass.maxDistance = 0.12;
+      composer.addPass(ssaoPass);
+    }
+    if(ssrEnabled){
+      const ssrPass = new SSRPass({ renderer, scene, camera, width: viewEl.clientWidth||1, height: viewEl.clientHeight||1 });
+      ssrPass.thickness = 0.02;
+      ssrPass.maxDistance = 4;
+      ssrPass.opacity = 0.9;
+      composer.addPass(ssrPass);
+    }
+    composer.addPass(outputPass);
+  } catch(err){
+    console.warn('VERTASCAN: failed to rebuild post-FX passes, disabling composer.', err);
+    composer = null;
+  }
+}
+document.getElementById('btnSSAO').classList.toggle('active', ssaoEnabled);
+document.getElementById('btnSSAO').onclick = ()=>{
+  ssaoEnabled = !ssaoEnabled;
+  document.getElementById('btnSSAO').classList.toggle('active', ssaoEnabled);
+  rebuildPostFX();
+};
+document.getElementById('btnSSR').onclick = ()=>{
+  ssrEnabled = !ssrEnabled;
+  document.getElementById('btnSSR').classList.toggle('active', ssrEnabled);
+  rebuildPostFX();
+};
+
+function resize(){
+  const w = viewEl.clientWidth, h = viewEl.clientHeight;
+  renderer.setSize(w,h);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  if(composer) composer.setSize(w,h);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------------- Material presets ---------------- */
+function carbonFiberTexture(){
+  const c = document.createElement('canvas'); c.width=c.height=128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#111'; ctx.fillRect(0,0,128,128);
+  ctx.fillStyle = '#1d1d1d';
+  for(let y=0;y<128;y+=8){
+    for(let x=0;x<128;x+=8){
+      if(((x/8)+(y/8))%2===0) ctx.fillRect(x,y,8,8);
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6,6);
+  return tex;
+}
+const MATERIALS = {
+  carpaint_red: () => new THREE.MeshPhysicalMaterial({color:0xb3141c, metalness:0.7, roughness:0.28, clearcoat:1, clearcoatRoughness:0.04}),
+  carpaint_blue:() => new THREE.MeshPhysicalMaterial({color:0x1c4fb3, metalness:0.7, roughness:0.28, clearcoat:1, clearcoatRoughness:0.04}),
+  chrome:       () => new THREE.MeshPhysicalMaterial({color:0xf2f2f2, metalness:1.0, roughness:0.045}),
+  aluminum:     () => new THREE.MeshPhysicalMaterial({color:0xb9bcc0, metalness:0.9, roughness:0.35}),
+  glass:        () => new THREE.MeshPhysicalMaterial({color:0xffffff, metalness:0, roughness:0.02, transmission:1, thickness:0.6, ior:1.5}),
+  plastic:      () => new THREE.MeshPhysicalMaterial({color:0x2b2e33, metalness:0, roughness:0.82}),
+  carbon:       () => new THREE.MeshPhysicalMaterial({color:0xffffff, map:carbonFiberTexture(), metalness:0.4, roughness:0.4, clearcoat:0.6}),
+};
+function defaultMat(){ return new THREE.MeshPhysicalMaterial({color:0x8a8f96, metalness:0.3, roughness:0.5}); }
+
+/* ---------------- Analysis shading ---------------- */
+let zebraEnv = null;
+function getZebraEnv(){
+  if(!zebraEnv){
+    const c = document.createElement('canvas'); c.width=256; c.height=128;
+    const ctx = c.getContext('2d');
+    for(let y=0;y<128;y++){
+      ctx.fillStyle = (Math.floor(y/8)%2===0) ? '#0a0a0a' : '#f5f5f5';
+      ctx.fillRect(0,y,256,1);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    zebraEnv = pmrem.fromEquirectangular(tex).texture;
+  }
+  return zebraEnv;
+}
+const normalMat = new THREE.MeshNormalMaterial();
+const curvatureVertShader = `
+  varying vec3 vN; varying vec3 vPos;
+  void main(){
+    vN = normalize(normalMatrix * normal);
+    vec4 mv = modelViewMatrix * vec4(position,1.0);
+    vPos = mv.xyz;
+    gl_Position = projectionMatrix * mv;
+  }`;
+const curvatureFragShader = `
+  varying vec3 vN; varying vec3 vPos;
+  void main(){
+    vec3 viewDir = normalize(-vPos);
+    float facing = dot(normalize(vN), viewDir);
+    vec3 lo = vec3(0.15,0.35,0.85);
+    vec3 hi = vec3(0.95,0.55,0.1);
+    vec3 col = mix(lo, hi, smoothstep(0.2,1.0,facing));
+    gl_FragColor = vec4(col,1.0);
+  }`;
+function curvatureMat(){
+  return new THREE.ShaderMaterial({ vertexShader:curvatureVertShader, fragmentShader:curvatureFragShader });
+}
+
+const originalMats = new WeakMap();
+let analysisMode = 'shaded';
+function applyAnalysisMode(){
+  contentRoot.traverse(obj=>{
+    if(!obj.isMesh) return;
+    if(!originalMats.has(obj)) originalMats.set(obj, obj.material);
+    const orig = originalMats.get(obj);
+    if(analysisMode === 'shaded'){
+      obj.material = orig; obj.material.wireframe=false;
+    } else if(analysisMode === 'wire'){
+      obj.material = orig; obj.material.wireframe=true;
+    } else if(analysisMode === 'normal'){
+      obj.material = normalMat;
+    } else if(analysisMode === 'zebra'){
+      obj.material = new THREE.MeshStandardMaterial({ envMap:getZebraEnv(), roughness:0.05, metalness:1.0, color:0xffffff });
+    } else if(analysisMode === 'curvature'){
+      obj.material = curvatureMat();
+    }
+  });
+}
+document.getElementById('analysisSelect').addEventListener('change', e=>{
+  analysisMode = e.target.value; applyAnalysisMode();
+});
+
+/* ---------------- Scene graph bookkeeping ---------------- */
+let objSeq = 1;
+const sceneItems = [];
+let selected = null;
+
+function registerObject(obj, name){
+  obj.userData.vid = objSeq++;
+  obj.userData.vname = name || ('Object_'+obj.userData.vid);
+  contentRoot.add(obj);
+  sceneItems.push(obj);
+  pushHistory({type:'add', obj});
+  refreshExplorer();
+  selectObject(obj);
+  return obj;
+}
+function removeObject(obj, record=true){
+  contentRoot.remove(obj);
+  const idx = sceneItems.indexOf(obj);
+  if(idx>=0) sceneItems.splice(idx,1);
+  if(record) pushHistory({type:'delete', obj});
+  if(selected===obj) selectObject(null);
+  refreshExplorer();
+}
+
+/* ---------------- Undo / Redo ---------------- */
+const undoStack = []; const redoStack = [];
+function pushHistory(action){ undoStack.push(action); redoStack.length=0; }
+function undo(){
+  const a = undoStack.pop(); if(!a) return;
+  if(a.type==='add'){ contentRoot.remove(a.obj); const i=sceneItems.indexOf(a.obj); if(i>=0)sceneItems.splice(i,1); redoStack.push(a); }
+  else if(a.type==='delete'){ contentRoot.add(a.obj); sceneItems.push(a.obj); redoStack.push(a); }
+  refreshExplorer(); selectObject(null);
+}
+function redo(){
+  const a = redoStack.pop(); if(!a) return;
+  if(a.type==='add'){ contentRoot.add(a.obj); sceneItems.push(a.obj); undoStack.push(a); }
+  else if(a.type==='delete'){ contentRoot.remove(a.obj); const i=sceneItems.indexOf(a.obj); if(i>=0)sceneItems.splice(i,1); undoStack.push(a); }
+  refreshExplorer(); selectObject(null);
+}
+document.getElementById('btnUndo').onclick = undo;
+document.getElementById('btnRedo').onclick = redo;
+
+/* ---------------- Selection highlight ---------------- */
+let selectionBox = null;
+function selectObject(obj){
+  selected = obj;
+  if(selectionBox){ scene.remove(selectionBox); selectionBox.geometry.dispose(); selectionBox=null; }
+  if(obj && obj.userData && obj.userData.vid){
+    selectionBox = new THREE.BoxHelper(obj, 0xff7a1a);
+    scene.add(selectionBox);
+  }
+  if(transformControls){
+    if(obj && obj.userData && obj.userData.vid){
+      transformControls.attach(obj);
+      transformControls.enabled = true;
+      transformControls.visible = true;
+    } else {
+      transformControls.detach();
+      transformControls.enabled = false;
+      transformControls.visible = false;
+    }
+  }
+  refreshExplorer();
+  refreshInspector();
+  document.getElementById('statSel').textContent = obj ? ('SEL: '+obj.userData.vname) : 'NO SELECTION';
+}
+
+/* ---------------- Scene Explorer UI ---------------- */
+function refreshExplorer(){
+  const list = document.getElementById('sceneList');
+  list.innerHTML = '';
+  document.getElementById('objCount').textContent = sceneItems.length;
+  sceneItems.forEach(obj=>{
+    const row = document.createElement('div');
+    row.className = 'scene-item' + (obj===selected ? ' sel' : '');
+    row.innerHTML = `<span class="vis">${obj.visible?'\u25c9':'\u25cb'}</span><span class="name">${obj.userData.vname}</span><span class="del">\u2715</span>`;
+    row.querySelector('.name').onclick = ()=>selectObject(obj);
+    row.querySelector('.vis').onclick = (e)=>{ e.stopPropagation(); obj.visible=!obj.visible; refreshExplorer(); };
+    row.querySelector('.del').onclick = (e)=>{ e.stopPropagation(); removeObject(obj); };
+    list.appendChild(row);
+  });
+}
+
+/* ---------------- Inspector UI ---------------- */
+function syncInspectorFields(){
+  if(!selected) return;
+  const o = selected;
+  const set = (id, v)=>{ const el = document.getElementById(id); if(el && document.activeElement!==el) el.value = v; };
+  set('px', o.position.x.toFixed(2)); set('py', o.position.y.toFixed(2)); set('pz', o.position.z.toFixed(2));
+  set('rx', THREE.MathUtils.radToDeg(o.rotation.x).toFixed(1));
+  set('ry', THREE.MathUtils.radToDeg(o.rotation.y).toFixed(1));
+  set('rz', THREE.MathUtils.radToDeg(o.rotation.z).toFixed(1));
+  set('sx', o.scale.x.toFixed(2)); set('sy', o.scale.y.toFixed(2)); set('sz', o.scale.z.toFixed(2));
+}
+function refreshInspector(){
+  const body = document.getElementById('inspectorBody');
+  if(!selected){ body.innerHTML = '<div class="empty-note">Select an object in the viewport or Scene Explorer to edit its transform and material.</div>'; return; }
+  const o = selected;
+  body.innerHTML = `
+    <div class="field-group">
+      <div class="field-group-title">Position</div>
+      <div class="field-row"><label>X</label><input type="number" step="0.1" id="px" value="${o.position.x.toFixed(2)}"></div>
+      <div class="field-row"><label>Y</label><input type="number" step="0.1" id="py" value="${o.position.y.toFixed(2)}"></div>
+      <div class="field-row"><label>Z</label><input type="number" step="0.1" id="pz" value="${o.position.z.toFixed(2)}"></div>
+    </div>
+    <div class="field-group">
+      <div class="field-group-title">Rotation (deg)</div>
+      <div class="field-row"><label>X</label><input type="number" step="1" id="rx" value="${THREE.MathUtils.radToDeg(o.rotation.x).toFixed(1)}"></div>
+      <div class="field-row"><label>Y</label><input type="number" step="1" id="ry" value="${THREE.MathUtils.radToDeg(o.rotation.y).toFixed(1)}"></div>
+      <div class="field-row"><label>Z</label><input type="number" step="1" id="rz" value="${THREE.MathUtils.radToDeg(o.rotation.z).toFixed(1)}"></div>
+    </div>
+    <div class="field-group">
+      <div class="field-group-title">Scale</div>
+      <div class="field-row"><label>X</label><input type="number" step="0.1" id="sx" value="${o.scale.x.toFixed(2)}"></div>
+      <div class="field-row"><label>Y</label><input type="number" step="0.1" id="sy" value="${o.scale.y.toFixed(2)}"></div>
+      <div class="field-row"><label>Z</label><input type="number" step="0.1" id="sz" value="${o.scale.z.toFixed(2)}"></div>
+    </div>
+    <div class="field-group">
+      <div class="field-group-title">Material Preset</div>
+      <div class="swatch-row" id="matSwatches">
+        ${Object.keys(MATERIALS).map(k=>`<div class="swatch" data-mat="${k}"><div class="dot" style="background:${swatchColor(k)}"></div>${k.replace('_',' ')}</div>`).join('')}
+      </div>
+      <div style="margin-top:8px;"></div>
+      <input type="color" id="colorPick" value="#8a8f96">
+    </div>
+    <button class="btn" id="btnDeleteSel">Delete Object</button>
+  `;
+  const bind = (id, axis, group)=>{
+    document.getElementById(id).addEventListener('input', e=>{
+      const v = parseFloat(e.target.value)||0;
+      if(group==='position') o.position[axis]=v;
+      if(group==='rotation') o.rotation[axis]=THREE.MathUtils.degToRad(v);
+      if(group==='scale') o.scale[axis]=v;
+      if(selectionBox) selectionBox.update();
+    });
+  };
+  ['x','y','z'].forEach(ax=>{
+    bind('p'+ax, ax, 'position'); bind('r'+ax, ax, 'rotation'); bind('s'+ax, ax, 'scale');
+  });
+  function eachMesh(fn){
+    if(o.isMesh) fn(o);
+    else o.traverse(c=>{ if(c.isMesh) fn(c); });
+  }
+  document.querySelectorAll('#matSwatches .swatch').forEach(sw=>{
+    sw.onclick = ()=>{
+      eachMesh(m=>{ m.material = MATERIALS[sw.dataset.mat](); originalMats.set(m, m.material); });
+      applyAnalysisMode();
+    };
+  });
+  document.getElementById('colorPick').addEventListener('input', e=>{
+    eachMesh(m=>{ if(m.material && m.material.color) m.material.color.set(e.target.value); });
+  });
+  document.getElementById('btnDeleteSel').onclick = ()=>removeObject(o);
+}
+function swatchColor(k){
+  const map = {carpaint_red:'#b3141c', carpaint_blue:'#1c4fb3', chrome:'#e8e8e8', aluminum:'#b9bcc0', glass:'#bfe8e6', plastic:'#2b2e33', carbon:'#222'};
+  return map[k]||'#888';
+}
+
+/* ---------------- Primitives ---------------- */
+function addPrimitive(type){
+  let geo;
+  if(type==='box') geo = new THREE.BoxGeometry(2,2,2);
+  else if(type==='sphere') geo = new THREE.SphereGeometry(1.2,48,32);
+  else if(type==='cylinder') geo = new THREE.CylinderGeometry(1,1,2.4,32);
+  else if(type==='cone') geo = new THREE.ConeGeometry(1.2,2.4,32);
+  else if(type==='torus') geo = new THREE.TorusGeometry(1.1,0.4,24,48);
+  const mesh = new THREE.Mesh(geo, defaultMat());
+  mesh.position.set((Math.random()-0.5)*4, geo.parameters.height ? geo.parameters.height/2 : 1.2, (Math.random()-0.5)*4);
+  registerObject(mesh, type.charAt(0).toUpperCase()+type.slice(1));
+  applyAnalysisMode();
+}
+document.querySelectorAll('[data-prim]').forEach(b=>b.onclick=()=>addPrimitive(b.dataset.prim));
+
+/* ---------------- Curve drawing tool ---------------- */
+let currentTool = 'select';
+let drawingPoints = [];
+let previewLine = null;
+const curveRegistry = [];
+const raycaster = new THREE.Raycaster();
+const mouseNDC = new THREE.Vector2();
+
+function setTool(tool){
+  currentTool = tool;
+  document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active', b.dataset.tool===tool));
+  document.getElementById('curveHint').style.display = tool==='curve' ? 'block' : 'none';
+  document.getElementById('statTool').textContent = 'TOOL: '+tool.toUpperCase();
+  if(tool!=='curve'){ cancelCurveDraw(); }
+}
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+setTool('select');
+
+function cancelCurveDraw(){
+  drawingPoints = [];
+  if(previewLine){ scene.remove(previewLine); previewLine.geometry.dispose(); previewLine=null; }
+}
+function updatePreviewLine(){
+  if(previewLine){ scene.remove(previewLine); previewLine.geometry.dispose(); }
+  if(drawingPoints.length<2) return;
+  const geo = new THREE.BufferGeometry().setFromPoints(drawingPoints);
+  previewLine = new THREE.Line(geo, new THREE.LineBasicMaterial({color:0xff7a1a}));
+  scene.add(previewLine);
+}
+function finishCurve(){
+  if(drawingPoints.length<2){ cancelCurveDraw(); return; }
+  const curve3 = new THREE.CatmullRomCurve3(drawingPoints.slice());
+  const sampled = curve3.getPoints(48);
+  const geo = new THREE.BufferGeometry().setFromPoints(sampled);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color:0x4fd1c5}));
+  line.userData.isCurve = true;
+  line.userData.rawPoints = drawingPoints.slice();
+  registerObject(line, 'Curve_'+(curveRegistry.length+1));
+  curveRegistry.push(line);
+  cancelCurveDraw();
+  setTool('select');
+}
+
+// Distinguish an actual click from the end of an orbit-camera drag: only treat
+// pointerup as a "click" if the pointer barely moved since pointerdown.
+let pointerDownPos = null;
+renderer.domElement.addEventListener('pointerdown', (e)=>{ pointerDownPos = {x:e.clientX, y:e.clientY}; });
+renderer.domElement.addEventListener('pointerup', (e)=>{
+  if(!pointerDownPos) return;
+  const dx = e.clientX-pointerDownPos.x, dy = e.clientY-pointerDownPos.y;
+  pointerDownPos = null;
+  if(Math.sqrt(dx*dx+dy*dy) > 5) return; // was a drag (orbit/pan), not a click
+  if(currentTool!=='curve') return handlePick(e);
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouseNDC.x = ((e.clientX-rect.left)/rect.width)*2-1;
+  mouseNDC.y = -((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  const pt = new THREE.Vector3();
+  if(raycaster.ray.intersectPlane(groundPlane, pt)){
+    drawingPoints.push(pt.clone());
+    updatePreviewLine();
+  }
+});
+renderer.domElement.addEventListener('dblclick', ()=>{ if(currentTool==='curve') finishCurve(); });
+function setGizmoMode(mode){
+  if(transformControls) transformControls.setMode(mode);
+  document.querySelectorAll('#gizmoModes [data-gizmo]').forEach(b=>b.classList.toggle('active', b.dataset.gizmo===mode));
+}
+document.querySelectorAll('#gizmoModes [data-gizmo]').forEach(b=>b.onclick=()=>setGizmoMode(b.dataset.gizmo));
+
+window.addEventListener('keydown', (e)=>{
+  // Ignore shortcuts while typing in an input field
+  const typing = document.activeElement && ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName);
+  if(currentTool==='curve'){
+    if(e.key==='Enter') finishCurve();
+    if(e.key==='Escape'){ cancelCurveDraw(); setTool('select'); }
+  }
+  if(typing) return;
+  if(e.key==='Delete' && selected) removeObject(selected);
+  if((e.ctrlKey||e.metaKey) && e.key==='z'){ e.preventDefault(); undo(); }
+  if((e.ctrlKey||e.metaKey) && e.key==='y'){ e.preventDefault(); redo(); }
+  if(e.key==='w' || e.key==='W') setGizmoMode('translate');
+  if(e.key==='e' || e.key==='E') setGizmoMode('rotate');
+  if(e.key==='r' || e.key==='R') setGizmoMode('scale');
+  if(e.key==='Escape' && currentTool!=='curve') selectObject(null);
+});
+
+function handlePick(e){
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouseNDC.x = ((e.clientX-rect.left)/rect.width)*2-1;
+  mouseNDC.y = -((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouseNDC, camera);
+  // Recursive: imported GLTF/OBJ files are Groups containing child meshes.
+  const hits = raycaster.intersectObjects(contentRoot.children, true);
+  if(hits.length){
+    let obj = hits[0].object;
+    while(obj.parent && obj.parent !== contentRoot) obj = obj.parent;
+    selectObject(obj);
+  } else {
+    selectObject(null);
+  }
+}
+
+/* ---------------- Surfacing operations ---------------- */
+document.getElementById('opRevolve').onclick = ()=>{
+  if(!selected || !selected.userData.isCurve){ flashHint('Select a curve first, then Revolve.'); return; }
+  const raw = selected.userData.rawPoints;
+  const pts2 = raw.map(p=>{
+    const r = Math.sqrt(p.x*p.x + p.z*p.z);
+    return new THREE.Vector2(Math.max(0.001,r), p.y);
+  });
+  if(pts2.length<2){ flashHint('Curve needs at least 2 points.'); return; }
+  const geo = new THREE.LatheGeometry(pts2, 48);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, defaultMat());
+  mesh.material.side = THREE.DoubleSide;
+  registerObject(mesh, 'Revolve_'+objSeq);
+  applyAnalysisMode();
+};
+document.getElementById('opExtrude').onclick = ()=>{
+  if(!selected || !selected.userData.isCurve){ flashHint('Select a curve first, then Extrude.'); return; }
+  const raw = selected.userData.rawPoints;
+  if(raw.length<3){ flashHint('Curve needs at least 3 points to extrude.'); return; }
+  const shape = new THREE.Shape(raw.map(p=>new THREE.Vector2(p.x, p.z)));
+  const geo = new THREE.ExtrudeGeometry(shape, {depth:1.5, bevelEnabled:true, bevelThickness:0.05, bevelSize:0.05, bevelSegments:2});
+  geo.rotateX(Math.PI/2);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, defaultMat());
+  mesh.material.side = THREE.DoubleSide;
+  registerObject(mesh, 'Extrude_'+objSeq);
+  applyAnalysisMode();
+};
+let loftPick = [];
+document.getElementById('opLoft').onclick = ()=>{
+  loftPick = loftPick.filter(c=>contentRoot.children.includes(c)); // drop stale/undone picks
+  if(!selected || !selected.userData.isCurve){
+    flashHint('Draw two curves. Select the first, click Loft, then select the second and click Loft again.');
+    return;
+  }
+  if(loftPick.indexOf(selected)===-1) loftPick.push(selected);
+  if(loftPick.length===2){ buildLoft(loftPick[0], loftPick[1]); loftPick=[]; }
+  else { flashHint('First curve set. Select a second curve and click Loft.'); }
+};
+function buildLoft(curveA, curveB){
+  const N = 32;
+  const ca = new THREE.CatmullRomCurve3(curveA.userData.rawPoints);
+  const cb = new THREE.CatmullRomCurve3(curveB.userData.rawPoints);
+  const a = ca.getPoints(N), b = cb.getPoints(N);
+  const positions = [];
+  for(let i=0;i<=N;i++){ positions.push(a[i].x,a[i].y,a[i].z); }
+  for(let i=0;i<=N;i++){ positions.push(b[i].x,b[i].y,b[i].z); }
+  const indices = [];
+  for(let i=0;i<N;i++){
+    const a0=i, a1=i+1, b0=(N+1)+i, b1=(N+1)+i+1;
+    indices.push(a0,b0,a1, a1,b0,b1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions,3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, defaultMat());
+  mesh.material.side = THREE.DoubleSide;
+  registerObject(mesh, 'Loft_'+objSeq);
+  applyAnalysisMode();
+}
+function flashHint(msg){
+  const tag = document.getElementById('cameraTag');
+  const old = tag.textContent;
+  tag.textContent = msg.toUpperCase();
+  tag.style.color = '#ff7a1a';
+  setTimeout(()=>{ tag.textContent = old; tag.style.color=''; }, 2200);
+}
+
+/* ---------------- Mesh tools ---------------- */
+document.getElementById('opShellFlip').onclick = ()=>{
+  const targets = [];
+  if(selected && selected.isMesh) targets.push(selected);
+  else if(selected) selected.traverse(c=>{ if(c.isMesh) targets.push(c); });
+  if(!targets.length) return flashHint('Select a mesh first.');
+  targets.forEach(mesh=>{
+    const geo = mesh.geometry;
+    const idx = geo.getIndex();
+    if(idx){
+      const arr = idx.array.slice();
+      for(let i=0;i<arr.length;i+=3){ const t=arr[i]; arr[i]=arr[i+2]; arr[i+2]=t; }
+      geo.setIndex(Array.from(arr));
+    } else {
+      // Non-indexed geometry (e.g. STL imports): reverse winding per-triangle on every attribute.
+      const pos = geo.getAttribute('position');
+      const swapTriplet = (attr)=>{
+        for(let i=0;i<attr.count;i+=3){
+          for(let k=0;k<attr.itemSize;k++){
+            const a = attr.getComponent(i,k), b = attr.getComponent(i+2,k);
+            attr.setComponent(i,k,b); attr.setComponent(i+2,k,a);
+          }
+        }
+        attr.needsUpdate = true;
+      };
+      swapTriplet(pos);
+      if(geo.getAttribute('normal')) swapTriplet(geo.getAttribute('normal'));
+      if(geo.getAttribute('uv')) swapTriplet(geo.getAttribute('uv'));
+    }
+    geo.computeVertexNormals();
+    if(mesh.material) mesh.material.side = THREE.DoubleSide;
+  });
+};
+document.getElementById('opMirror').onclick = ()=>{
+  if(!selected || !selected.isMesh) return flashHint('Select a mesh first.');
+  const clone = selected.clone();
+  clone.geometry = selected.geometry.clone();
+  clone.scale.x *= -1;
+  clone.position.x = selected.position.x*-1;
+  registerObject(clone, selected.userData.vname+'_mirror');
+  applyAnalysisMode();
+};
+
+/* ---------------- Camera bookmarks ---------------- */
+const bookmarks = {
+  persp: {pos:[9,7,12], target:[0,1,0], label:'PERSPECTIVE'},
+  top:   {pos:[0,18,0.001], target:[0,0,0], label:'TOP'},
+  front: {pos:[0,3,16], target:[0,3,0], label:'FRONT'},
+  right: {pos:[16,3,0], target:[0,3,0], label:'RIGHT'},
+};
+document.querySelectorAll('#camBookmarks [data-cam]').forEach(b=>{
+  b.onclick = ()=>{
+    const bm = bookmarks[b.dataset.cam];
+    camera.position.set(...bm.pos);
+    controls.target.set(...bm.target);
+    document.getElementById('cameraTag').textContent = bm.label;
+  };
+});
+
+/* ---------------- Import / Export ---------------- */
+const gltfLoader = new GLTFLoader();
+const objLoader = new OBJLoader();
+const stlLoader = new STLLoader();
+document.getElementById('btnImport').onclick = ()=>document.getElementById('fileInput').click();
+document.getElementById('fileInput').addEventListener('change', e=>{
+  if(e.target.files[0]) loadFile(e.target.files[0]);
+});
+function loadFile(file){
+  const url = URL.createObjectURL(file);
+  const name = file.name.toLowerCase();
+  if(name.endsWith('.glb')||name.endsWith('.gltf')){
+    gltfLoader.load(url, gltf=>{
+      registerObject(gltf.scene, file.name);
+      applyAnalysisMode();
+    });
+  } else if(name.endsWith('.obj')){
+    objLoader.load(url, obj=>{
+      obj.traverse(c=>{ if(c.isMesh) c.material = defaultMat(); });
+      registerObject(obj, file.name);
+      applyAnalysisMode();
+    });
+  } else if(name.endsWith('.stl')){
+    stlLoader.load(url, geo=>{
+      geo.computeVertexNormals();
+      const mesh = new THREE.Mesh(geo, defaultMat());
+      registerObject(mesh, file.name);
+      applyAnalysisMode();
+    });
+  } else {
+    flashHint('Unsupported format. Use GLB, OBJ or STL.');
+  }
+}
+['dragover','dragenter'].forEach(ev=>viewEl.addEventListener(ev, e=>{ e.preventDefault(); document.getElementById('dropHint').style.display='flex'; }));
+['dragleave','drop'].forEach(ev=>viewEl.addEventListener(ev, e=>{ e.preventDefault(); document.getElementById('dropHint').style.display='none'; }));
+viewEl.addEventListener('drop', e=>{ if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+const gltfExporter = new GLTFExporter();
+document.getElementById('btnExportGLTF').onclick = ()=>{
+  gltfExporter.parse(contentRoot, result=>{
+    const blob = new Blob([result instanceof ArrayBuffer ? result : JSON.stringify(result)], {type:'application/octet-stream'});
+    downloadBlob(blob, 'vertascan-scene.glb');
+  }, err=>console.error(err), {binary:true});
+};
+const stlExporter = new STLExporter();
+document.getElementById('btnExportSTL').onclick = ()=>{
+  const str = stlExporter.parse(contentRoot, {binary:false});
+  downloadBlob(new Blob([str],{type:'text/plain'}), 'vertascan-scene.stl');
+};
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ---------------- Capture Render: snapshot the final rendered frame ---------------- */
+document.getElementById('btnCapture').onclick = ()=>{
+  const targetW = 1920, targetH = 1080;
+  const prevW = viewEl.clientWidth, prevH = viewEl.clientHeight;
+  const prevAspect = camera.aspect;
+  const gridWasVisible = grid.visible;
+  const gizmoWasVisible = transformControls ? transformControls.visible : false;
+  // Hide viewport chrome (grid, selection outline, gizmo) for a clean render.
+  grid.visible = false;
+  if(selectionBox) selectionBox.visible = false;
+  if(transformControls) transformControls.visible = false;
+
+  renderer.setSize(targetW, targetH, false);
+  if(composer) composer.setSize(targetW, targetH);
+  camera.aspect = targetW/targetH;
+  camera.updateProjectionMatrix();
+
+  if(composer) composer.render(); else renderer.render(scene, camera);
+  const dataURL = renderer.domElement.toDataURL('image/png');
+
+  grid.visible = gridWasVisible;
+  if(selectionBox) selectionBox.visible = true;
+  if(transformControls) transformControls.visible = gizmoWasVisible;
+  renderer.setSize(prevW, prevH, false);
+  if(composer) composer.setSize(prevW, prevH);
+  camera.aspect = prevAspect;
+  camera.updateProjectionMatrix();
+
+  const a = document.createElement('a');
+  a.href = dataURL; a.download = 'vertascan-render-'+Date.now()+'.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  flashHint('Render captured: 1920x1080 PNG');
+};
+
+/* ---------------- Logo canvas (animated zebra swatch signature) ---------------- */
+const logoCanvas = document.getElementById('logoCanvas');
+const lctx = logoCanvas.getContext('2d');
+let logoT = 0;
+function drawLogo(){
+  logoT += 0.006;
+  lctx.clearRect(0,0,56,56);
+  lctx.save();
+  lctx.translate(28,28);
+  lctx.rotate(logoT);
+  for(let i=0;i<10;i++){
+    lctx.fillStyle = i%2===0 ? '#ff7a1a' : '#141619';
+    lctx.beginPath();
+    lctx.moveTo(0,0);
+    lctx.arc(0,0,26, (i/10)*Math.PI*2, ((i+1)/10)*Math.PI*2);
+    lctx.closePath();
+    lctx.fill();
+  }
+  lctx.restore();
+  lctx.fillStyle = '#0b0c0e';
+  lctx.beginPath(); lctx.arc(28,28,10,0,Math.PI*2); lctx.fill();
+}
+
+/* ---------------- Render loop ---------------- */
+let frames=0, lastFpsT=performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  if(selectionBox) selectionBox.update();
+  drawLogo();
+  if(composer) composer.render(); else renderer.render(scene, camera);
+  frames++;
+  const now = performance.now();
+  if(now-lastFpsT>500){
+    document.getElementById('statFps').textContent = Math.round(frames*1000/(now-lastFpsT))+' FPS';
+    frames=0; lastFpsT=now;
+  }
+}
+animate();
+
+/* ---------------- Seed scene ---------------- */
+(function seed(){
+  const geo = new THREE.SphereGeometry(1.4, 48, 32);
+  const mesh = new THREE.Mesh(geo, MATERIALS.carpaint_red());
+  mesh.position.set(0,1.4,0);
+  registerObject(mesh, 'Seed_Form');
+  applyAnalysisMode();
+  selectObject(null);
+})();
+</script>
+</body>
+</html>
