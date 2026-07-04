@@ -128,7 +128,19 @@
       <button class="topbtn" id="btnImport">Import</button>
       <button class="topbtn" id="btnExportGLTF">Export GLB</button>
       <button class="topbtn" id="btnExportSTL">Export STL</button>
+      <button class="topbtn" id="btnCapture">Capture Render</button>
       <input type="file" id="fileInput" accept=".glb,.gltf,.obj,.stl">
+    </div>
+    <div class="menu-group">
+      <span style="font-size:10px;color:var(--text-dim);font-family:'Space Mono',monospace;align-self:center;">ENV</span>
+      <select id="envSelect">
+        <option value="studio">Studio</option>
+        <option value="sunset">Sunset</option>
+        <option value="overcast">Overcast</option>
+        <option value="neutral">Neutral Grey</option>
+      </select>
+      <button class="topbtn" id="btnSSAO" title="Screen-space ambient occlusion">SSAO</button>
+      <button class="topbtn" id="btnSSR" title="Screen-space reflections">SSR</button>
     </div>
     <div class="menu-group">
       <button class="topbtn" id="btnUndo">Undo</button>
@@ -231,6 +243,11 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { SSRPass } from 'three/addons/postprocessing/SSRPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* ============================================================
    VERTASCAN | SURFACE ENGINE (lite)
@@ -272,11 +289,42 @@ controls.dampingFactor = 0.08;
 controls.target.set(0,1,0);
 
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 const key = new THREE.DirectionalLight(0xffffff, 2.2);
 key.position.set(6,10,4);
 scene.add(key);
 scene.add(new THREE.AmbientLight(0x404040, 0.6));
+
+/* ---------------- Environment presets (real PBR IBL, not fake reflections) ---------------- */
+function makeGradientEnvTexture(stops){
+  const c = document.createElement('canvas'); c.width=64; c.height=256;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0,0,0,256);
+  stops.forEach(s=>grad.addColorStop(s.stop, s.color));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,64,256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const ENV_PRESETS = {
+  studio:   ()=> pmrem.fromScene(new RoomEnvironment(), 0.04).texture,
+  sunset:   ()=> pmrem.fromEquirectangular(makeGradientEnvTexture([
+    {stop:0,color:'#150f22'},{stop:0.45,color:'#ff8a3d'},{stop:0.55,color:'#ffd9a0'},{stop:1,color:'#241708'}
+  ])).texture,
+  overcast: ()=> pmrem.fromEquirectangular(makeGradientEnvTexture([
+    {stop:0,color:'#5c6672'},{stop:0.5,color:'#c9cdd2'},{stop:1,color:'#33363a'}
+  ])).texture,
+  neutral:  ()=> pmrem.fromEquirectangular(makeGradientEnvTexture([
+    {stop:0,color:'#3c3c3c'},{stop:0.5,color:'#7a7a7a'},{stop:1,color:'#181818'}
+  ])).texture,
+};
+function setEnvironment(name){
+  try { scene.environment = ENV_PRESETS[name] ? ENV_PRESETS[name]() : ENV_PRESETS.studio(); }
+  catch(err){ console.warn('VERTASCAN: environment preset failed', err); }
+}
+setEnvironment('studio');
+document.getElementById('envSelect').addEventListener('change', e=>setEnvironment(e.target.value));
 
 const grid = new THREE.GridHelper(40, 80, 0x3a3e45, 0x22242a);
 scene.add(grid);
@@ -310,11 +358,61 @@ try {
   transformControls = null;
 }
 
+/* ---------------- Post-processing pipeline: SSAO + SSR (toggleable) ---------------- */
+let composer = null, renderPass = null, outputPass = null;
+let ssaoEnabled = true, ssrEnabled = false;
+try {
+  composer = new EffectComposer(renderer);
+  renderPass = new RenderPass(scene, camera);
+  outputPass = new OutputPass();
+  rebuildPostFX();
+} catch(err){
+  console.warn('VERTASCAN: post-processing pipeline unavailable, falling back to direct render.', err);
+  composer = null;
+}
+function rebuildPostFX(){
+  if(!composer) return;
+  try {
+    composer.passes.length = 0;
+    composer.addPass(renderPass);
+    if(ssaoEnabled){
+      const ssaoPass = new SSAOPass(scene, camera, viewEl.clientWidth||1, viewEl.clientHeight||1);
+      ssaoPass.kernelRadius = 0.5;
+      ssaoPass.minDistance = 0.0008;
+      ssaoPass.maxDistance = 0.12;
+      composer.addPass(ssaoPass);
+    }
+    if(ssrEnabled){
+      const ssrPass = new SSRPass({ renderer, scene, camera, width: viewEl.clientWidth||1, height: viewEl.clientHeight||1 });
+      ssrPass.thickness = 0.02;
+      ssrPass.maxDistance = 4;
+      ssrPass.opacity = 0.9;
+      composer.addPass(ssrPass);
+    }
+    composer.addPass(outputPass);
+  } catch(err){
+    console.warn('VERTASCAN: failed to rebuild post-FX passes, disabling composer.', err);
+    composer = null;
+  }
+}
+document.getElementById('btnSSAO').classList.toggle('active', ssaoEnabled);
+document.getElementById('btnSSAO').onclick = ()=>{
+  ssaoEnabled = !ssaoEnabled;
+  document.getElementById('btnSSAO').classList.toggle('active', ssaoEnabled);
+  rebuildPostFX();
+};
+document.getElementById('btnSSR').onclick = ()=>{
+  ssrEnabled = !ssrEnabled;
+  document.getElementById('btnSSR').classList.toggle('active', ssrEnabled);
+  rebuildPostFX();
+};
+
 function resize(){
   const w = viewEl.clientWidth, h = viewEl.clientHeight;
   renderer.setSize(w,h);
   camera.aspect = w/h;
   camera.updateProjectionMatrix();
+  if(composer) composer.setSize(w,h);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -871,6 +969,40 @@ function downloadBlob(blob, filename){
   document.body.appendChild(a); a.click(); a.remove();
 }
 
+/* ---------------- Capture Render: snapshot the final rendered frame ---------------- */
+document.getElementById('btnCapture').onclick = ()=>{
+  const targetW = 1920, targetH = 1080;
+  const prevW = viewEl.clientWidth, prevH = viewEl.clientHeight;
+  const prevAspect = camera.aspect;
+  const gridWasVisible = grid.visible;
+  const gizmoWasVisible = transformControls ? transformControls.visible : false;
+  // Hide viewport chrome (grid, selection outline, gizmo) for a clean render.
+  grid.visible = false;
+  if(selectionBox) selectionBox.visible = false;
+  if(transformControls) transformControls.visible = false;
+
+  renderer.setSize(targetW, targetH, false);
+  if(composer) composer.setSize(targetW, targetH);
+  camera.aspect = targetW/targetH;
+  camera.updateProjectionMatrix();
+
+  if(composer) composer.render(); else renderer.render(scene, camera);
+  const dataURL = renderer.domElement.toDataURL('image/png');
+
+  grid.visible = gridWasVisible;
+  if(selectionBox) selectionBox.visible = true;
+  if(transformControls) transformControls.visible = gizmoWasVisible;
+  renderer.setSize(prevW, prevH, false);
+  if(composer) composer.setSize(prevW, prevH);
+  camera.aspect = prevAspect;
+  camera.updateProjectionMatrix();
+
+  const a = document.createElement('a');
+  a.href = dataURL; a.download = 'vertascan-render-'+Date.now()+'.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  flashHint('Render captured: 1920x1080 PNG');
+};
+
 /* ---------------- Logo canvas (animated zebra swatch signature) ---------------- */
 const logoCanvas = document.getElementById('logoCanvas');
 const lctx = logoCanvas.getContext('2d');
@@ -901,7 +1033,7 @@ function animate(){
   controls.update();
   if(selectionBox) selectionBox.update();
   drawLogo();
-  renderer.render(scene, camera);
+  if(composer) composer.render(); else renderer.render(scene, camera);
   frames++;
   const now = performance.now();
   if(now-lastFpsT>500){
